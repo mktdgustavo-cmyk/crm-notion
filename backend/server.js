@@ -32,6 +32,8 @@ app.get('/', (req, res) => {
     const API_URL = window.location.origin;
     let deals = [];
     let selectedDeal = null;
+    let funnelChart = null;
+    let valueChart = null;
 
     async function fetchDeals() {
       document.getElementById('app').innerHTML = '<div class="flex items-center justify-center h-screen"><div class="text-center"><div class="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto mb-4"></div><p class="text-gray-400">Carregando...</p></div></div>';
@@ -277,12 +279,16 @@ app.get('/', (req, res) => {
           <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
             <div class="bg-gray-800 p-6 rounded-xl shadow-lg">
               <h3 class="text-xl font-bold mb-4">Funil de Vendas</h3>
-              <canvas id="funnelChart" width="400" height="300"></canvas>
+              <div style="position: relative; height: 300px;">
+                <canvas id="funnelChart"></canvas>
+              </div>
             </div>
 
             <div class="bg-gray-800 p-6 rounded-xl shadow-lg">
               <h3 class="text-xl font-bold mb-4">Valor por Estágio</h3>
-              <canvas id="valueChart" width="400" height="300"></canvas>
+              <div style="position: relative; height: 300px;">
+                <canvas id="valueChart"></canvas>
+              </div>
             </div>
           </div>
 
@@ -363,72 +369,85 @@ app.get('/', (req, res) => {
     }
 
     function renderCharts() {
-      // Funil Chart
-      const funnelCtx = document.getElementById('funnelChart');
-      if (funnelCtx) {
-        new Chart(funnelCtx, {
-          type: 'pie',
-          data: {
-            labels: ['To-Do', 'Em Progresso', 'Ganhos', 'Perdas'],
-            datasets: [{
-              data: [
-                deals.filter(d => d.stage === 'to_do').length,
-                deals.filter(d => d.stage === 'in_progress').length,
-                deals.filter(d => d.status === 'Iniciar Implementação' || d.status === 'Contrato enviado').length,
-                deals.filter(d => d.status === 'PERDA').length
-              ],
-              backgroundColor: ['#6B7280', '#3B82F6', '#10B981', '#EF4444']
-            }]
-          },
-          options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            plugins: {
-              legend: {
-                labels: { color: '#fff' }
-              }
-            }
-          }
-        });
+      // Destruir gráficos anteriores antes de criar novos
+      if (funnelChart) {
+        funnelChart.destroy();
+        funnelChart = null;
+      }
+      if (valueChart) {
+        valueChart.destroy();
+        valueChart = null;
       }
 
-      // Value Chart
-      const valueCtx = document.getElementById('valueChart');
-      if (valueCtx) {
-        new Chart(valueCtx, {
-          type: 'bar',
-          data: {
-            labels: ['To-Do', 'Em Progresso', 'Ganhos'],
-            datasets: [{
-              label: 'Valor (R$)',
-              data: [
-                deals.filter(d => d.stage === 'to_do').reduce((sum, d) => sum + d.value, 0),
-                deals.filter(d => d.stage === 'in_progress').reduce((sum, d) => sum + d.value, 0),
-                deals.filter(d => d.status === 'Iniciar Implementação' || d.status === 'Contrato enviado').reduce((sum, d) => sum + d.value, 0)
-              ],
-              backgroundColor: '#3B82F6'
-            }]
-          },
-          options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            scales: {
-              y: {
-                beginAtZero: true,
-                ticks: { color: '#fff' }
-              },
-              x: {
-                ticks: { color: '#fff' }
-              }
+      // Esperar um pouco para garantir que o DOM está pronto
+      setTimeout(() => {
+        // Funil Chart
+        const funnelCtx = document.getElementById('funnelChart');
+        if (funnelCtx) {
+          funnelChart = new Chart(funnelCtx, {
+            type: 'pie',
+            data: {
+              labels: ['To-Do', 'Em Progresso', 'Ganhos', 'Perdas'],
+              datasets: [{
+                data: [
+                  deals.filter(d => d.stage === 'to_do').length,
+                  deals.filter(d => d.stage === 'in_progress').length,
+                  deals.filter(d => d.status === 'Iniciar Implementação' || d.status === 'Contrato enviado').length,
+                  deals.filter(d => d.status === 'PERDA').length
+                ],
+                backgroundColor: ['#6B7280', '#3B82F6', '#10B981', '#EF4444']
+              }]
             },
-            plugins: {
-              legend: {
-                labels: { color: '#fff' }
+            options: {
+              responsive: true,
+              maintainAspectRatio: true,
+              plugins: {
+                legend: {
+                  labels: { color: '#fff' }
+                }
               }
             }
-          }
-        });
-      }
+          });
+        }
+
+        // Value Chart
+        const valueCtx = document.getElementById('valueChart');
+        if (valueCtx) {
+          valueChart = new Chart(valueCtx, {
+            type: 'bar',
+            data: {
+              labels: ['To-Do', 'Em Progresso', 'Ganhos'],
+              datasets: [{
+                label: 'Valor (R$)',
+                data: [
+                  deals.filter(d => d.stage === 'to_do').reduce((sum, d) => sum + d.value, 0),
+                  deals.filter(d => d.stage === 'in_progress').reduce((sum, d) => sum + d.value, 0),
+                  deals.filter(d => d.status === 'Iniciar Implementação' || d.status === 'Contrato enviado').reduce((sum, d) => sum + d.value, 0)
+                ],
+                backgroundColor: '#3B82F6'
+              }]
+            },
+            options: {
+              responsive: true,
+              maintainAspectRatio: true,
+              scales: {
+                y: {
+                  beginAtZero: true,
+                  ticks: { color: '#fff' }
+                },
+                x: {
+                  ticks: { color: '#fff' }
+                }
+              },
+              plugins: {
+                legend: {
+                  labels: { color: '#fff' }
+                }
+              }
+            }
+          });
+        }
+      }, 100);
     }
 
     // Carregar dados ao iniciar
