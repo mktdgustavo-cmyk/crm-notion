@@ -63,6 +63,13 @@ app.get('/api/deals', async (req, res) => {
         return '';
       };
 
+      const getStatus = (prop) => {
+        if (prop && prop.status && prop.status.name) {
+          return prop.status.name;
+        }
+        return '';
+      };
+
       const getPeople = (prop) => {
         if (prop && prop.people && prop.people.length > 0) {
           return prop.people.map(p => p.name).join(', ');
@@ -77,8 +84,30 @@ app.get('/api/deals', async (req, res) => {
         return null;
       };
 
-      const status = getSelect(props['Status']);
-      const title = getPeople(props['Quem está negociando']) || 'Sem nome';
+      const getPhone = (prop) => {
+        if (prop && prop.phone_number) {
+          return prop.phone_number;
+        }
+        return '';
+      };
+
+      const getEmail = (prop) => {
+        if (prop && prop.email) {
+          return prop.email;
+        }
+        return '';
+      };
+
+      const getUrl = (prop) => {
+        if (prop && prop.url) {
+          return prop.url;
+        }
+        return '';
+      };
+
+      // Campos corretos do Notion
+      const status = getStatus(props['Status']);
+      const title = getTitle(props['Nome']) || getPeople(props['Quem está negociando?']) || 'Sem nome';
       
       return {
         id: page.id,
@@ -87,14 +116,18 @@ app.get('/api/deals', async (req, res) => {
         status: status,
         createdAt: getDate(props['Criado em']) || page.created_time,
         lastUpdate: getDate(props['Última atualização']) || page.last_edited_time,
-        gk: getSelect(props['GK']),
+        gk: getRichText(props['GK']),
         quality: getSelect(props['Qualidade']),
-        lossReason: getRichText(props['Motivo de perda']),
-        phone: getRichText(props['Telefone']),
-        whatsapp: getRichText(props['WhatsApp']),
-        email: getRichText(props['E-mail']),
+        lossReason: getSelect(props['Motivo de perda']),
+        phone: getPhone(props['Telefone']),
+        whatsapp: getPhone(props['WhatsApp']),
+        email: getEmail(props['E-mail']),
+        instagram: getUrl(props['Instagram']),
+        site: getUrl(props['Site']),
         decisor: getRichText(props['Decisor']),
-        cidade: getRichText(props['Cidade'])
+        cidade: getRichText(props['Cidade']),
+        cnpj: getRichText(props['CNPJ']),
+        negotiating: getPeople(props['Quem está negociando?'])
       };
     });
 
