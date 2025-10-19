@@ -22,13 +22,16 @@ app.get('/', (req, res) => {
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>CRM Dashboard</title>
   <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 <body class="bg-gray-900 text-white">
   <div id="app"></div>
+  <div id="modal"></div>
 
   <script>
     const API_URL = window.location.origin;
     let deals = [];
+    let selectedDeal = null;
 
     async function fetchDeals() {
       document.getElementById('app').innerHTML = '<div class="flex items-center justify-center h-screen"><div class="text-center"><div class="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto mb-4"></div><p class="text-gray-400">Carregando...</p></div></div>';
@@ -43,11 +46,145 @@ app.get('/', (req, res) => {
             stage: getStageFromStatus(deal.status)
           }));
           renderDashboard();
+          renderCharts();
         }
       } catch (error) {
         console.error('Erro:', error);
         document.getElementById('app').innerHTML = '<div class="flex items-center justify-center h-screen"><div class="text-center"><p class="text-red-500 text-xl">❌ Erro ao carregar dados</p></div></div>';
       }
+    }
+
+    function showModal(deal) {
+      selectedDeal = deal;
+      document.getElementById('modal').innerHTML = \`
+        <div class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50" onclick="closeModal()">
+          <div class="bg-gray-800 rounded-xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto" onclick="event.stopPropagation()">
+            <div class="p-6">
+              <div class="flex justify-between items-start mb-6">
+                <h2 class="text-2xl font-bold">\${deal.title}</h2>
+                <button onclick="closeModal()" class="hover:bg-gray-700 p-2 rounded-lg transition">✕</button>
+              </div>
+
+              <div class="space-y-4">
+                <div>
+                  <label class="text-sm text-gray-400">Status</label>
+                  <div class="inline-block px-3 py-1 rounded text-sm text-white mt-1 \${getStatusColor(deal.status)}">
+                    \${deal.status || 'Sem status'}
+                  </div>
+                </div>
+
+                \${deal.value > 0 ? \`
+                  <div>
+                    <label class="text-sm text-gray-400">Valor da Proposta</label>
+                    <p class="text-2xl font-bold text-green-500 mt-1">R$ \${deal.value.toLocaleString('pt-BR')}</p>
+                  </div>
+                \` : ''}
+
+                <div class="grid grid-cols-2 gap-4">
+                  <div>
+                    <label class="text-sm text-gray-400">Criado em</label>
+                    <p class="mt-1">\${new Date(deal.createdAt).toLocaleDateString('pt-BR')}</p>
+                  </div>
+                  <div>
+                    <label class="text-sm text-gray-400">Última Atualização</label>
+                    <p class="mt-1">\${new Date(deal.lastUpdate).toLocaleDateString('pt-BR')}</p>
+                  </div>
+                </div>
+
+                \${deal.gk ? \`
+                  <div>
+                    <label class="text-sm text-gray-400">GK Responsável</label>
+                    <p class="mt-1">\${deal.gk}</p>
+                  </div>
+                \` : ''}
+
+                \${deal.negotiating ? \`
+                  <div>
+                    <label class="text-sm text-gray-400">Quem está negociando</label>
+                    <p class="mt-1">\${deal.negotiating}</p>
+                  </div>
+                \` : ''}
+
+                \${deal.decisor ? \`
+                  <div>
+                    <label class="text-sm text-gray-400">Decisor</label>
+                    <p class="mt-1">\${deal.decisor}</p>
+                  </div>
+                \` : ''}
+
+                \${deal.quality ? \`
+                  <div>
+                    <label class="text-sm text-gray-400">Qualidade</label>
+                    <p class="mt-1">\${deal.quality}</p>
+                  </div>
+                \` : ''}
+
+                <!-- Dados de Contato -->
+                <div class="border-t border-gray-700 pt-4">
+                  <h3 class="font-bold mb-3">Dados de Contato</h3>
+                  <div class="grid grid-cols-2 gap-3">
+                    \${deal.phone ? \`
+                      <div>
+                        <label class="text-sm text-gray-400">Telefone</label>
+                        <p class="mt-1">\${deal.phone}</p>
+                      </div>
+                    \` : ''}
+                    \${deal.whatsapp ? \`
+                      <div>
+                        <label class="text-sm text-gray-400">WhatsApp</label>
+                        <p class="mt-1">\${deal.whatsapp}</p>
+                      </div>
+                    \` : ''}
+                    \${deal.email ? \`
+                      <div>
+                        <label class="text-sm text-gray-400">E-mail</label>
+                        <p class="mt-1">\${deal.email}</p>
+                      </div>
+                    \` : ''}
+                    \${deal.cidade ? \`
+                      <div>
+                        <label class="text-sm text-gray-400">Cidade</label>
+                        <p class="mt-1">\${deal.cidade}</p>
+                      </div>
+                    \` : ''}
+                  </div>
+                </div>
+
+                \${deal.instagram || deal.site ? \`
+                  <div class="border-t border-gray-700 pt-4">
+                    <h3 class="font-bold mb-3">Links</h3>
+                    <div class="space-y-2">
+                      \${deal.instagram ? \`<a href="\${deal.instagram}" target="_blank" class="block text-blue-400 hover:text-blue-300">📸 Instagram</a>\` : ''}
+                      \${deal.site ? \`<a href="\${deal.site}" target="_blank" class="block text-blue-400 hover:text-blue-300">🌐 Website</a>\` : ''}
+                    </div>
+                  </div>
+                \` : ''}
+
+                \${deal.lossReason ? \`
+                  <div class="bg-red-900 bg-opacity-30 border-l-4 border-red-600 p-4 rounded-r-lg">
+                    <label class="text-sm text-gray-400">Motivo da Perda</label>
+                    <p class="mt-1 text-red-400 font-semibold">\${deal.lossReason}</p>
+                  </div>
+                \` : ''}
+
+                <div class="pt-4 border-t border-gray-700 flex gap-3">
+                  <a href="https://notion.so/\${deal.id.replace(/-/g, '')}" target="_blank" class="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 rounded-lg transition text-center">
+                    Abrir no Notion
+                  </a>
+                  <button onclick="closeModal()" class="px-6 bg-gray-700 hover:bg-gray-600 text-white font-semibold py-3 rounded-lg transition">
+                    Fechar
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      \`;
+    }
+
+    function closeModal() {
+      document.getElementById('modal').innerHTML = '';
+      selectedDeal = null;
     }
 
     function getStageFromStatus(status) {
@@ -136,6 +273,19 @@ app.get('/', (req, res) => {
             </div>
           </div>
 
+          <!-- Gráficos -->
+          <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+            <div class="bg-gray-800 p-6 rounded-xl shadow-lg">
+              <h3 class="text-xl font-bold mb-4">Funil de Vendas</h3>
+              <canvas id="funnelChart" width="400" height="300"></canvas>
+            </div>
+
+            <div class="bg-gray-800 p-6 rounded-xl shadow-lg">
+              <h3 class="text-xl font-bold mb-4">Valor por Estágio</h3>
+              <canvas id="valueChart" width="400" height="300"></canvas>
+            </div>
+          </div>
+
           <!-- Kanban -->
           <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
             <!-- To-Do -->
@@ -149,7 +299,7 @@ app.get('/', (req, res) => {
               </div>
               <div class="space-y-3 max-h-96 overflow-y-auto">
                 \${dealsByStage.to_do.map(deal => \`
-                  <div class="bg-gray-700 p-4 rounded-lg cursor-pointer hover:bg-gray-600 transition border-l-4 border-gray-500">
+                  <div onclick="showModal(\${JSON.stringify(deal).replace(/"/g, '&quot;')})" class="bg-gray-700 p-4 rounded-lg cursor-pointer hover:bg-gray-600 transition border-l-4 border-gray-500">
                     <h4 class="font-semibold mb-2">\${deal.title}</h4>
                     <div class="inline-block px-2 py-1 rounded text-xs text-white mb-2 \${getStatusColor(deal.status)}">
                       \${deal.status || 'Sem status'}
@@ -172,7 +322,7 @@ app.get('/', (req, res) => {
               </div>
               <div class="space-y-3 max-h-96 overflow-y-auto">
                 \${dealsByStage.in_progress.map(deal => \`
-                  <div class="bg-gray-700 p-4 rounded-lg cursor-pointer hover:bg-gray-600 transition border-l-4 border-blue-500">
+                  <div onclick="showModal(\${JSON.stringify(deal).replace(/"/g, '&quot;')})" class="bg-gray-700 p-4 rounded-lg cursor-pointer hover:bg-gray-600 transition border-l-4 border-blue-500">
                     <h4 class="font-semibold mb-2">\${deal.title}</h4>
                     <div class="inline-block px-2 py-1 rounded text-xs text-white mb-2 \${getStatusColor(deal.status)}">
                       \${deal.status || 'Sem status'}
@@ -195,7 +345,7 @@ app.get('/', (req, res) => {
               </div>
               <div class="space-y-3 max-h-96 overflow-y-auto">
                 \${dealsByStage.complete.map(deal => \`
-                  <div class="bg-gray-700 p-4 rounded-lg cursor-pointer hover:bg-gray-600 transition border-l-4 \${deal.status === 'PERDA' ? 'border-red-500' : 'border-green-500'}">
+                  <div onclick="showModal(\${JSON.stringify(deal).replace(/"/g, '&quot;')})" class="bg-gray-700 p-4 rounded-lg cursor-pointer hover:bg-gray-600 transition border-l-4 \${deal.status === 'PERDA' ? 'border-red-500' : 'border-green-500'}">
                     <h4 class="font-semibold mb-2">\${deal.title}</h4>
                     <div class="inline-block px-2 py-1 rounded text-xs text-white mb-2 \${getStatusColor(deal.status)}">
                       \${deal.status || 'Sem status'}
@@ -210,6 +360,75 @@ app.get('/', (req, res) => {
           </div>
         </div>
       \`;
+    }
+
+    function renderCharts() {
+      // Funil Chart
+      const funnelCtx = document.getElementById('funnelChart');
+      if (funnelCtx) {
+        new Chart(funnelCtx, {
+          type: 'pie',
+          data: {
+            labels: ['To-Do', 'Em Progresso', 'Ganhos', 'Perdas'],
+            datasets: [{
+              data: [
+                deals.filter(d => d.stage === 'to_do').length,
+                deals.filter(d => d.stage === 'in_progress').length,
+                deals.filter(d => d.status === 'Iniciar Implementação' || d.status === 'Contrato enviado').length,
+                deals.filter(d => d.status === 'PERDA').length
+              ],
+              backgroundColor: ['#6B7280', '#3B82F6', '#10B981', '#EF4444']
+            }]
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+              legend: {
+                labels: { color: '#fff' }
+              }
+            }
+          }
+        });
+      }
+
+      // Value Chart
+      const valueCtx = document.getElementById('valueChart');
+      if (valueCtx) {
+        new Chart(valueCtx, {
+          type: 'bar',
+          data: {
+            labels: ['To-Do', 'Em Progresso', 'Ganhos'],
+            datasets: [{
+              label: 'Valor (R$)',
+              data: [
+                deals.filter(d => d.stage === 'to_do').reduce((sum, d) => sum + d.value, 0),
+                deals.filter(d => d.stage === 'in_progress').reduce((sum, d) => sum + d.value, 0),
+                deals.filter(d => d.status === 'Iniciar Implementação' || d.status === 'Contrato enviado').reduce((sum, d) => sum + d.value, 0)
+              ],
+              backgroundColor: '#3B82F6'
+            }]
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+              y: {
+                beginAtZero: true,
+                ticks: { color: '#fff' }
+              },
+              x: {
+                ticks: { color: '#fff' }
+              }
+            },
+            plugins: {
+              legend: {
+                labels: { color: '#fff' }
+              }
+            }
+          }
+        });
+      }
     }
 
     // Carregar dados ao iniciar
