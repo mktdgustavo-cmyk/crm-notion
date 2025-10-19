@@ -110,6 +110,16 @@ app.get('/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
+// Debug endpoint - REMOVER DEPOIS!
+app.get('/debug', (req, res) => {
+  res.json({
+    hasToken: !!NOTION_TOKEN,
+    tokenPrefix: NOTION_TOKEN ? NOTION_TOKEN.substring(0, 10) + '...' : 'MISSING',
+    databaseId: DATABASE_ID,
+    env: process.env.NODE_ENV
+  });
+});
+
 app.listen(PORT, () => {
   console.log(`🚀 Backend rodando na porta ${PORT}`);
   console.log(`📊 Notion Database ID: ${DATABASE_ID}`);
