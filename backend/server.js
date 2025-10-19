@@ -120,6 +120,29 @@ app.get('/debug', (req, res) => {
   });
 });
 
+// Debug properties - Ver nomes das propriedades
+app.get('/api/properties', async (req, res) => {
+  try {
+    const response = await fetch(`https://api.notion.com/v1/databases/${DATABASE_ID}`, {
+      method: 'GET',
+      headers: {
+        'Authorization': `Bearer ${NOTION_TOKEN}`,
+        'Notion-Version': '2022-06-28'
+      }
+    });
+
+    const data = await response.json();
+    const properties = Object.keys(data.properties || {}).map(key => ({
+      name: key,
+      type: data.properties[key].type
+    }));
+
+    res.json({ success: true, properties });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 app.listen(PORT, () => {
   console.log(`🚀 Backend rodando na porta ${PORT}`);
   console.log(`📊 Notion Database ID: ${DATABASE_ID}`);
