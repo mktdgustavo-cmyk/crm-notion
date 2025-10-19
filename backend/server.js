@@ -12,6 +12,217 @@ const DATABASE_ID = process.env.DATABASE_ID || '259bf5178fd480be9d03e67b3f452c4a
 app.use(cors());
 app.use(express.json());
 
+// Servir frontend na raiz
+app.get('/', (req, res) => {
+  res.send(`
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CRM Dashboard</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-900 text-white">
+  <div id="app"></div>
+
+  <script>
+    const API_URL = window.location.origin;
+    let deals = [];
+
+    async function fetchDeals() {
+      document.getElementById('app').innerHTML = '<div class="flex items-center justify-center h-screen"><div class="text-center"><div class="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto mb-4"></div><p class="text-gray-400">Carregando...</p></div></div>';
+      
+      try {
+        const response = await fetch(API_URL + '/api/deals');
+        const result = await response.json();
+        
+        if (result.success) {
+          deals = result.data.map(deal => ({
+            ...deal,
+            stage: getStageFromStatus(deal.status)
+          }));
+          renderDashboard();
+        }
+      } catch (error) {
+        console.error('Erro:', error);
+        document.getElementById('app').innerHTML = '<div class="flex items-center justify-center h-screen"><div class="text-center"><p class="text-red-500 text-xl">❌ Erro ao carregar dados</p></div></div>';
+      }
+    }
+
+    function getStageFromStatus(status) {
+      const todoStatuses = ['Novo Lead', 'Tentativa de contato', 'Lead Interessado', 'Contato Realizado'];
+      const completeStatuses = ['Contrato enviado', 'Iniciar Implementação', 'PERDA', 'ARQUIVO'];
+      
+      if (todoStatuses.includes(status)) return 'to_do';
+      if (completeStatuses.includes(status)) return 'complete';
+      return 'in_progress';
+    }
+
+    function getStatusColor(status) {
+      if (!status) return 'bg-gray-500';
+      if (status.includes('PERDA')) return 'bg-red-500';
+      if (status.includes('Contrato') || status.includes('Iniciar')) return 'bg-green-500';
+      if (status.includes('Congelado')) return 'bg-blue-400';
+      if (status.includes('Follow')) return 'bg-yellow-500';
+      return 'bg-purple-500';
+    }
+
+    function renderDashboard() {
+      const wonDeals = deals.filter(d => d.status === 'Iniciar Implementação' || d.status === 'Contrato enviado');
+      const lostDeals = deals.filter(d => d.status === 'PERDA');
+      
+      const metrics = {
+        total: deals.length,
+        won: wonDeals.length,
+        lost: lostDeals.length,
+        wonValue: wonDeals.reduce((sum, d) => sum + d.value, 0)
+      };
+
+      const conversionRate = (metrics.won + metrics.lost) > 0 
+        ? ((metrics.won / (metrics.won + metrics.lost)) * 100).toFixed(1) 
+        : 0;
+
+      const avgClosingTime = wonDeals.length > 0 
+        ? Math.floor(wonDeals.reduce((sum, d) => {
+            const days = Math.floor((new Date(d.lastUpdate) - new Date(d.createdAt)) / (1000 * 60 * 60 * 24));
+            return sum + days;
+          }, 0) / wonDeals.length)
+        : 0;
+
+      const dealsByStage = {
+        to_do: deals.filter(d => d.stage === 'to_do'),
+        in_progress: deals.filter(d => d.stage === 'in_progress'),
+        complete: deals.filter(d => d.stage === 'complete')
+      };
+
+      document.getElementById('app').innerHTML = \`
+        <div class="bg-gray-800 shadow-lg">
+          <div class="max-w-7xl mx-auto px-4 py-4">
+            <div class="flex justify-between items-center">
+              <div>
+                <h1 class="text-3xl font-bold bg-gradient-to-r from-blue-500 to-blue-700 bg-clip-text text-transparent">
+                  CRM Dashboard
+                </h1>
+                <p class="text-sm text-gray-400">
+                  ✅ Conectado ao Notion • \${deals.length} oportunidades
+                </p>
+              </div>
+              <button onclick="fetchDeals()" class="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white transition">
+                🔄 Atualizar
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div class="max-w-7xl mx-auto px-4 py-8">
+          <!-- Métricas -->
+          <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+            <div class="bg-gray-800 p-6 rounded-xl shadow-lg">
+              <p class="text-sm text-gray-400">Total de Oportunidades</p>
+              <p class="text-3xl font-bold mt-2">\${metrics.total}</p>
+            </div>
+            <div class="bg-gray-800 p-6 rounded-xl shadow-lg">
+              <p class="text-sm text-gray-400">Taxa de Conversão</p>
+              <p class="text-3xl font-bold mt-2 text-green-500">\${conversionRate}%</p>
+            </div>
+            <div class="bg-gray-800 p-6 rounded-xl shadow-lg">
+              <p class="text-sm text-gray-400">Tempo Médio</p>
+              <p class="text-3xl font-bold mt-2">\${avgClosingTime} dias</p>
+            </div>
+            <div class="bg-gray-800 p-6 rounded-xl shadow-lg">
+              <p class="text-sm text-gray-400">Valor Ganho</p>
+              <p class="text-2xl font-bold mt-2 text-green-500">R$ \${metrics.wonValue.toLocaleString('pt-BR')}</p>
+            </div>
+          </div>
+
+          <!-- Kanban -->
+          <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <!-- To-Do -->
+            <div class="bg-gray-800 rounded-xl shadow-lg p-4">
+              <div class="flex items-center justify-between mb-4">
+                <h3 class="font-bold text-lg flex items-center gap-2">
+                  <div class="w-3 h-3 rounded-full bg-gray-500"></div>
+                  To-Do
+                </h3>
+                <span class="px-3 py-1 rounded-full text-sm font-semibold bg-gray-700">\${dealsByStage.to_do.length}</span>
+              </div>
+              <div class="space-y-3 max-h-96 overflow-y-auto">
+                \${dealsByStage.to_do.map(deal => \`
+                  <div class="bg-gray-700 p-4 rounded-lg cursor-pointer hover:bg-gray-600 transition border-l-4 border-gray-500">
+                    <h4 class="font-semibold mb-2">\${deal.title}</h4>
+                    <div class="inline-block px-2 py-1 rounded text-xs text-white mb-2 \${getStatusColor(deal.status)}">
+                      \${deal.status || 'Sem status'}
+                    </div>
+                    \${deal.value > 0 ? \`<p class="text-sm text-green-500 font-semibold">R$ \${deal.value.toLocaleString('pt-BR')}</p>\` : ''}
+                    \${deal.gk ? \`<p class="text-xs text-gray-400 mt-2">GK: \${deal.gk}</p>\` : ''}
+                  </div>
+                \`).join('')}
+              </div>
+            </div>
+
+            <!-- Em Progresso -->
+            <div class="bg-gray-800 rounded-xl shadow-lg p-4">
+              <div class="flex items-center justify-between mb-4">
+                <h3 class="font-bold text-lg flex items-center gap-2">
+                  <div class="w-3 h-3 rounded-full bg-blue-500"></div>
+                  Em Progresso
+                </h3>
+                <span class="px-3 py-1 rounded-full text-sm font-semibold bg-blue-900 text-blue-500">\${dealsByStage.in_progress.length}</span>
+              </div>
+              <div class="space-y-3 max-h-96 overflow-y-auto">
+                \${dealsByStage.in_progress.map(deal => \`
+                  <div class="bg-gray-700 p-4 rounded-lg cursor-pointer hover:bg-gray-600 transition border-l-4 border-blue-500">
+                    <h4 class="font-semibold mb-2">\${deal.title}</h4>
+                    <div class="inline-block px-2 py-1 rounded text-xs text-white mb-2 \${getStatusColor(deal.status)}">
+                      \${deal.status || 'Sem status'}
+                    </div>
+                    \${deal.value > 0 ? \`<p class="text-sm text-green-500 font-semibold">R$ \${deal.value.toLocaleString('pt-BR')}</p>\` : ''}
+                    \${deal.gk ? \`<p class="text-xs text-gray-400 mt-2">GK: \${deal.gk}</p>\` : ''}
+                  </div>
+                \`).join('')}
+              </div>
+            </div>
+
+            <!-- Completo -->
+            <div class="bg-gray-800 rounded-xl shadow-lg p-4">
+              <div class="flex items-center justify-between mb-4">
+                <h3 class="font-bold text-lg flex items-center gap-2">
+                  <div class="w-3 h-3 rounded-full bg-green-500"></div>
+                  Completo
+                </h3>
+                <span class="px-3 py-1 rounded-full text-sm font-semibold bg-green-900 text-green-500">\${dealsByStage.complete.length}</span>
+              </div>
+              <div class="space-y-3 max-h-96 overflow-y-auto">
+                \${dealsByStage.complete.map(deal => \`
+                  <div class="bg-gray-700 p-4 rounded-lg cursor-pointer hover:bg-gray-600 transition border-l-4 \${deal.status === 'PERDA' ? 'border-red-500' : 'border-green-500'}">
+                    <h4 class="font-semibold mb-2">\${deal.title}</h4>
+                    <div class="inline-block px-2 py-1 rounded text-xs text-white mb-2 \${getStatusColor(deal.status)}">
+                      \${deal.status || 'Sem status'}
+                    </div>
+                    \${deal.value > 0 ? \`<p class="text-sm text-green-500 font-semibold">R$ \${deal.value.toLocaleString('pt-BR')}</p>\` : ''}
+                    \${deal.gk ? \`<p class="text-xs text-gray-400 mt-2">GK: \${deal.gk}</p>\` : ''}
+                    \${deal.lossReason ? \`<p class="text-xs text-red-400 mt-2">Motivo: \${deal.lossReason}</p>\` : ''}
+                  </div>
+                \`).join('')}
+              </div>
+            </div>
+          </div>
+        </div>
+      \`;
+    }
+
+    // Carregar dados ao iniciar
+    fetchDeals();
+    
+    // Auto-refresh a cada 5 minutos
+    setInterval(fetchDeals, 5 * 60 * 1000);
+  </script>
+</body>
+</html>
+  `);
+});
+
 // Endpoint para buscar dados do Notion
 app.get('/api/deals', async (req, res) => {
   try {
